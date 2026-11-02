@@ -14,8 +14,9 @@ The current sketch is `esp32-micro-laptop.ino` (Arduino sketch folder name
   - 262K colors, normally black, 10-pin FPC
   - Datasheet: https://www.compel.ru/item-pdf/f3a5393f33faf9c615d816b0b70a37cf/pn/gldmrn~t240b7-c10-25.pdf
 - **Backlight:** LEDA / LEDK, VF ≈ 3.1 V, IF ≈ 80 mA
-- **Built-in LED:** RGB LED on GPIO 8 (`LED_BUILTIN`), driven white by
-  `digitalWrite(LED_BUILTIN, HIGH/LOW)`; used as a 1 Hz heartbeat.
+- **Built-in LED:** addressable RGB LED (WS2812) on GPIO 8, driven via
+  `rgbLedWrite(RGB_BUILTIN, r, g, b)` (0..255 per channel). Used as a slow
+  rainbow cycle at ~10% brightness (max value 25/255).
 
 ## Wiring (confirmed working)
 
@@ -61,6 +62,14 @@ Installed libraries:
     reached the display (black screen).
 - TFT_eSPI is configured per-sketch via `tft_setup.h` (sits next to the
   `.ino` and is auto-included by TFT_eSPI's `__has_include` mechanism).
+- **simple-tui** (repo `../simple-tui`) — header-only text UI. `simple_tui.hpp`
+  is copied next to the sketch so the Arduino build sees it. It is driven by a
+  `stui::Display` backend (`TftDisplay` in the sketch).
+- **IBM Plex Mono 16px smooth font** — `IBMPlexMono16.h` (174 glyphs: ASCII,
+  Cyrillic, punctuation and box-drawing `─│┌┐└┘├┤┬┴┼`). Loaded with
+  `tft.loadFont(IBMPlexMono16)`; this requires `#define SMOOTH_FONT` in
+  `tft_setup.h`. The font has no `…` glyph and no space glyph (spaces use
+  `gFont.spaceWidth` = 5 px, narrower than a cell).
 
 Build / flash / monitor:
 
@@ -108,39 +117,38 @@ tft.fillScreen(TFT_BLACK);
 
 - SPI clock is set in `tft_setup.h` (`SPI_FREQUENCY`, 16 MHz by default). It is
   reliable with this wiring.
-- Do **not** clear/redraw large areas line-by-line; it causes visible flicker.
-- Current approach: render the animation into an off-screen `TFT_eSprite`
-  and push it in one SPI transfer:
+- The UI is a character grid: each `stui::Display::print(x, y, str)` call
+  fills one cell with the current background color and draws one glyph.
+  `SimpleTui` redraws the whole screen every 500 ms (`redraw_interval_ms`),
+  and `Text` clears its previous cells with spaces before repainting, so a
+  naive per-cell `fillRect` + glyph costs ~190 ms per frame and flickers.
+- `TftDisplay` therefore double-buffers on the cell level: `print()` only
+  writes into a `pending_` grid, and `flush()` (called right after every
+  `tui.loop()` and after `setScreen`) compares it with `shown_` and paints
+  only the changed cells. A normal update touches 1–2 cells (~1.5 ms);
+  static content is not repainted at all.
+- `fillRect` + glyph per changed cell (rather than the font's background fill)
+  keeps every cell exactly `cellW × cellH`, which matters because the smoothed
+  space glyph only advances 5 px.
+- For a future full-screen animation, an off-screen `TFT_eSprite` pushed in
+  one SPI transfer is still the flicker-free option for large redraws.
 
-```cpp
-TFT_eSprite sprite(&tft);
-sprite.createSprite(200, 200);   // ~80 KB in RAM
+## Current screen
 
-sprite.fillSprite(TFT_BLACK);
-// draw with sprite.drawLine / sprite.fillCircle / sprite.print ...
-sprite.pushSprite(areaX, areaY);
-```
+`esp32-micro-laptop.ino` shows the simple-tui dashboard from
+`../simple-tui/src/main.cpp`:
 
-- A full 320×240 sprite is 153,600 bytes and also fits in the ~310 KB free
-  heap, but the 200×200 cube region is faster.
-- Frame rate is dominated by the SPI transfer: 200×200 at 16 MHz ≈ 40 ms
-  (~20–25 fps). Raise `SPI_FREQUENCY` to 40000000 in `tft_setup.h` if needed.
-- Use time-based animation (`dt` from `millis()`) so speed does not depend on
-  frame rate.
-- Avoid `delay()` in the animation loop unless necessary.
-
-## Current animation
-
-`esp32-micro-laptop.ino` shows a rotating 3D wireframe cube:
-
-- 8 corners, 12 edges, perspective projection
-- Rainbow edges, dimmed by depth; white corner dots
-- 200×200 off-screen canvas, centered below the title
-- Cube corners are at radius √3, so the max projected radius is about
-  `1.44 × CUBE_SCALE`. With a 200×200 canvas, keep `CUBE_SCALE` ≤ ~63;
-  the current value is 62 (max radius ≈ 89 px) to avoid clipping corners.
+- Header row: `[*   ]  [bat:78%] [wifi:-66dBm]` (spacing 1 to fit 32 cols)
+- Left column: battery / Wi-Fi / boxed `x,y: 0,0`
+- Right column (green border on blue): live `dist: N m`, temperature,
+  pressure, humidity, UV, uptime
+- The `dist` value is a `char distance[12]` buffer refreshed every 500 ms;
+  `Row::render` re-measures so the text shifts as the number grows
+- Cell grid: `cellW = 10 px` (`gxAdvance` of the monospace font),
+  `cellH = 22 px` (`fontHeight()` = 16 ascent + 6 max descent) →
+  **32 × 10 cells** (`SimpleTui<32, 10>`)
 - Boot color self-test: red → green → blue → white (300 ms each)
-- Built-in LED heartbeat at 1 Hz
+- Built-in RGB LED: slow rainbow cycle at ~10% brightness
 
 ## Useful defaults
 

@@ -21,6 +21,12 @@
 // ---- Display driver ---------------------------------------------------------
 #define ST7789_DRIVER
 
+// ---- Colour order -----------------------------------------------------------
+// This panel wires the ST7789 colour order as BGR: with the default (RGB) red
+// and blue come out swapped. TFT_RGB_ORDER picks the MADCTL colour-order bit
+// at init; it is not changeable at runtime through the public API.
+#define TFT_RGB_ORDER TFT_BGR
+
 // ---- Panel size (native portrait) ------------------------------------------
 #define TFT_WIDTH  240
 #define TFT_HEIGHT 320
@@ -35,6 +41,10 @@
 
 // ---- SPI host (mandatory on ESP32-C6: route to SPI2 / FSPI) ----------------
 #define USE_FSPI_PORT
+
+// ---- Smooth (anti-aliased) fonts -------------------------------------------
+// Required by tft.loadFont(IBMPlexMono16) and by simple-tui's TftDisplay.
+#define SMOOTH_FONT
 
 // ---- SPI clock -------------------------------------------------------------
 // 16 MHz is the value confirmed reliable on this wiring (matches the

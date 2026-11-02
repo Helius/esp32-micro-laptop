@@ -3,8 +3,8 @@
 ## Project
 
 ESP32-C6 firmware for a small "microlaptop" with a 2.4" SPI TFT.
-The current sketch is `firmware.ino` (Arduino sketch folder name **must** match
-the `.ino` name, so keep it as `firmware/firmware.ino`).
+The current sketch is `esp32-micro-laptop.ino` (Arduino sketch folder name
+**must** match the `.ino` name).
 
 ## Hardware
 
@@ -48,9 +48,19 @@ Important:
 
 Installed libraries:
 
-- Adafruit GFX Library 1.13.0
-- Adafruit ST7735 and ST7789 Library 1.12.0
-- Adafruit BusIO 1.17.4
+- **TFT_eSPI 2.5.43** — with ESP32-C6 support from PR #3399
+  (https://github.com/Bodmer/TFT_eSPI/pull/3399). The PR routes C6 through
+  the C3 processor files (`TFT_eSPI_ESP32_C3.*`). Two fixes were applied to
+  `Processors/TFT_eSPI_ESP32_C3.h`:
+  - Removed a duplicate `CONFIG_IDF_TARGET` guard with a lowercase `ESP32c6`
+    typo that misidentified C6 as plain ESP32.
+  - Removed C6 from the `TFT_MISO = TFT_MOSI` condition. The PR aliased
+    `TFT_MISO` to `TFT_MOSI` (GPIO 5) on C6 when `TFT_MISO == -1`, but this
+    display is write-only (MISO not connected). The alias made `spi.begin()`
+    configure GPIO 5 as an input (MISO) conflicting with MOSI output — no data
+    reached the display (black screen).
+- TFT_eSPI is configured per-sketch via `tft_setup.h` (sits next to the
+  `.ino` and is auto-included by TFT_eSPI's `__has_include` mechanism).
 
 Build / flash / monitor:
 
@@ -73,59 +83,55 @@ before the monitor attaches; a `stty -F /dev/ttyACM0 115200 raw -echo` +
 ## Display initialization (known good)
 
 ```cpp
-#include <SPI.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_ST7789.h>
+#include "tft_setup.h"          // per-sketch config (pins, driver, SPI clock)
+#include <TFT_eSPI.h>
 
-#define TFT_CS    3
-#define TFT_DC    2
-#define TFT_RST   1
-#define TFT_SCLK  6
-#define TFT_MOSI  5
-
-Adafruit_ST7789 tft(TFT_CS, TFT_DC, TFT_RST);
+TFT_eSPI tft = TFT_eSPI();
 
 // In setup():
-SPI.begin(TFT_SCLK, -1, TFT_MOSI, TFT_CS);  // ESP32 SPI2/FSPI, custom pins
-tft.init(240, 320);                          // native portrait resolution
-tft.setRotation(3);                          // landscape, 320 x 240, upright
-tft.fillScreen(ST77XX_BLACK);
+tft.init();
+tft.setRotation(3);            // landscape, 320 x 240, upright
+tft.fillScreen(TFT_BLACK);
 ```
 
-- On ESP32-C6, Arduino's `SPI` object is **SPI2 (FSPI)**, not SPI0/SPI1.
-  `FSPI` being defined as `0` in the core is just an enum value; SPI0/SPI1 are
-  the flash/cache controllers.
+- TFT_eSPI is configured via `tft_setup.h` in the sketch folder (pins, driver,
+  SPI clock, FSPI host). No `SPI.begin()` call is needed — TFT_eSPI handles SPI
+  init itself from those defines.
+- On ESP32-C6 the only general-purpose SPI controller is **SPI2 (FSPI/GPSPI)**.
+  TFT_eSPI's C3/C6 backend defines `SPI_PORT=2` and `VSPI=FSPI` for register
+  and Arduino-SPI access, both resolving to GPSPI2.
 - `setRotation(3)` gives the current landscape orientation (320 × 240) with the
   panel mounted as it is. `setRotation(1)` is the opposite 180° landscape.
 - If the image is offset, adjust the panel offsets after `init()`.
 
 ## Graphics performance / flicker
 
-- Default hardware SPI speed is 16 MHz. It is reliable with this wiring.
+- SPI clock is set in `tft_setup.h` (`SPI_FREQUENCY`, 16 MHz by default). It is
+  reliable with this wiring.
 - Do **not** clear/redraw large areas line-by-line; it causes visible flicker.
-- Current approach: render the animation into an off-screen `GFXcanvas16`
+- Current approach: render the animation into an off-screen `TFT_eSprite`
   and push it in one SPI transfer:
 
 ```cpp
-GFXcanvas16 canvas(200, 200);   // ~80 KB in RAM
+TFT_eSprite sprite(&tft);
+sprite.createSprite(200, 200);   // ~80 KB in RAM
 
-canvas.fillScreen(ST77XX_BLACK);
-// draw with canvas.drawLine / canvas.fillCircle / canvas.print ...
-tft.drawRGBBitmap(areaX, areaY, (uint16_t *)canvas.getBuffer(),
-                  canvas.width(), canvas.height());
+sprite.fillSprite(TFT_BLACK);
+// draw with sprite.drawLine / sprite.fillCircle / sprite.print ...
+sprite.pushSprite(areaX, areaY);
 ```
 
-- A full 320×240 canvas is 153,600 bytes and also fits in the ~310 KB free
+- A full 320×240 sprite is 153,600 bytes and also fits in the ~310 KB free
   heap, but the 200×200 cube region is faster.
 - Frame rate is dominated by the SPI transfer: 200×200 at 16 MHz ≈ 40 ms
-  (~20–25 fps). Raise `tft.setSPISpeed(24000000)` or `40000000` if needed.
+  (~20–25 fps). Raise `SPI_FREQUENCY` to 40000000 in `tft_setup.h` if needed.
 - Use time-based animation (`dt` from `millis()`) so speed does not depend on
   frame rate.
 - Avoid `delay()` in the animation loop unless necessary.
 
 ## Current animation
 
-`firmware.ino` shows a rotating 3D wireframe cube:
+`esp32-micro-laptop.ino` shows a rotating 3D wireframe cube:
 
 - 8 corners, 12 edges, perspective projection
 - Rainbow edges, dimmed by depth; white corner dots
@@ -141,6 +147,6 @@ tft.drawRGBBitmap(areaX, areaY, (uint16_t *)canvas.getBuffer(),
 - Landscape size: `screenW = tft.width()` = 320, `screenH = tft.height()` = 240
   after `setRotation(3)`.
 - Colors are RGB565; `tft.color565(r, g, b)` is available.
-- `ST77XX_BLACK`, `ST77XX_WHITE`, `ST77XX_RED`, `ST77XX_GREEN`,
-  `ST77XX_BLUE`, `ST77XX_CYAN` are defined by Adafruit_GFX.
+- `TFT_BLACK`, `TFT_WHITE`, `TFT_RED`, `TFT_GREEN`, `TFT_BLUE`, `TFT_CYAN`
+  are defined by TFT_eSPI.
 - Text: `setTextSize(2)`, 6×8 font → 12×16 px per character.

@@ -1,10 +1,10 @@
 /*
  * ESP32-C6 + ST7789 2.4" 240x320 IPS
- * simple-tui dashboard (landscape 320x240)
+ * SimpleTui dashboard (landscape 320x240)
  *
  * Display: T240B7-C10-25 (ST7789, 4-wire SPI)
  * Library: TFT_eSPI (configured via tft_setup.h in this sketch folder)
- * UI:      simple-tui (simple_tui.hpp, copied from ../simple-tui/include)
+ * UI:      SimpleTui (<SimpleTui.h>, installed in ~/Arduino/libraries)
  * Font:    IBM Plex Mono 16px smooth font (IBMPlexMono16.h)
  *
  * Wiring:
@@ -27,7 +27,7 @@
 
 #include <string.h>
 
-#include "simple_tui.hpp"
+#include <SimpleTui.h>
 #include "IBMPlexMono16.h"
 
 // ---- Panel size (native, portrait) -----------------------------------------
@@ -38,8 +38,8 @@ TFT_eSPI tft = TFT_eSPI();
 
 bool displayReady = false;
 
-// ---- simple-tui Display backend --------------------------------------------
-// simple-tui works on a character grid of fixed-size cells. The smooth font is
+// ---- SimpleTui Display backend ---------------------------------------------
+// SimpleTui works on a character grid of fixed-size cells. The smooth font is
 // monospace: every glyph advances by the same width and the line height is
 // gFont.yAdvance, so both values are read from the loaded font in setup().
 int16_t cellW = 10;   // replaced by the font's advance width after loadFont()
@@ -62,7 +62,7 @@ struct Cell {
   bool valid = false;
 };
 
-// simple-tui renders the whole tree on every redraw and repaints each Text
+// SimpleTui renders the whole tree on every redraw and repaints each Text
 // (it clears the previous cells with spaces, then writes the new content).
 // Painting that straight to the panel costs ~190 ms per frame at 16 MHz and
 // shows the erase/redraw as flicker. So `print()` only fills a shadow grid;
@@ -142,14 +142,14 @@ TftDisplay display;
 
 stui::SimpleTui<kCols, kRows> tui(display);
 
-// ---- Dashboard screen (mirrors simple-tui/src/main.cpp) --------------------
+// ---- Dashboard screen (mirrors SimpleTui/src/main.cpp) ---------------------
 char distance[12] = "0";
 uint32_t counter = 0;
 
-stui::Text pageIndicator{"[ *  ]", {.colors = {.fg = stui::color_blue}}};
-stui::Text batteryIndicator{"[bat:78%]", {.colors = {.fg = stui::color_blue}}};
+stui::Text pageIndicator{"[ *  ]", {.color = {.fg = stui::color_blue}}};
+stui::Text batteryIndicator{"[bat:78%]", {.color = {.fg = stui::color_blue}}};
 stui::Text wifiIndicator{"[wifi:-66 dBm]",
-                         {.colors = {.fg = stui::color_blue}}};
+                         {.color = {.fg = stui::color_blue}}};
 
 stui::Row header{
     {.spacing = 1,
@@ -162,7 +162,7 @@ stui::Row header{
 stui::Text spacer{""};
 stui::Text batteryVoltage{"battery: 3.9V"};
 stui::Text wifiLevel{"WIFI: -66 dBm"};
-stui::Text coordinates{"x,y: 0,0", {.colors = {.bg = stui::color_blue}, .border = true}};
+stui::Text coordinates{"x,y: 0,0", {.color = {.bg = stui::color_blue}, .border = true}};
 
 stui::Column leftColumn{
     {.spacing = 0},
@@ -172,10 +172,10 @@ stui::Column leftColumn{
     coordinates,
 };
 
-stui::Text distLabel{"dist: ", {.colors = {.fg = stui::color_green}}};
+stui::Text distLabel{"dist: ", {.color = {.fg = stui::color_green}}};
 stui::Text distValue{distance,
-                     {.colors = {.fg = stui::color_red}}};
-stui::Text distUnit{" m", {.colors = {.fg = stui::color_green}}};
+                     {.color = {.fg = stui::color_red}}};
+stui::Text distUnit{" m", {.color = {.fg = stui::color_green}}};
 
 stui::Row distanceRow{
     {.spacing = 0},
@@ -238,7 +238,7 @@ void setup() {
 
   delay(300);
   Serial.println();
-  Serial.println("ST7789 simple-tui dashboard starting...");
+  Serial.println("ST7789 SimpleTui dashboard starting...");
 
   // Built-in RGB LED at ~10% brightness (max value 25/255).
   pinMode(RGB_BUILTIN, OUTPUT);

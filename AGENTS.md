@@ -62,9 +62,11 @@ Installed libraries:
     reached the display (black screen).
 - TFT_eSPI is configured per-sketch via `tft_setup.h` (sits next to the
   `.ino` and is auto-included by TFT_eSPI's `__has_include` mechanism).
-- **simple-tui** (repo `../simple-tui`) — header-only text UI. `simple_tui.hpp`
-  is copied next to the sketch so the Arduino build sees it. It is driven by a
-  `stui::Display` backend (`TftDisplay` in the sketch).
+- **SimpleTui** (repo `../SimpleTui`) — header-only text UI installed the
+  standard Arduino way: `~/Arduino/libraries/SimpleTui` is a symlink to the
+  repo, so `#include <SimpleTui.h>` resolves through the library manager. No
+  copy lives in the sketch folder. It is driven by a `stui::Display` backend
+  (`TftDisplay` in the sketch).
 - **IBM Plex Mono 16px smooth font** — `IBMPlexMono16.h` (174 glyphs: ASCII,
   Cyrillic, punctuation and box-drawing `─│┌┐└┘├┤┬┴┼`). Loaded with
   `tft.loadFont(IBMPlexMono16)`; this requires `#define SMOOTH_FONT` in
@@ -135,8 +137,8 @@ tft.fillScreen(TFT_BLACK);
 
 ## Current screen
 
-`esp32-micro-laptop.ino` shows the simple-tui dashboard from
-`../simple-tui/src/main.cpp`:
+`esp32-micro-laptop.ino` shows the SimpleTui dashboard from
+`../SimpleTui/src/main.cpp`:
 
 - Header row: `[*   ]  [bat:78%] [wifi:-66dBm]` (spacing 1 to fit 32 cols)
 - Left column: battery / Wi-Fi / boxed `x,y: 0,0`

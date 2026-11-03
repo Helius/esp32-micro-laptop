@@ -43,7 +43,7 @@
 #define USE_FSPI_PORT
 
 // ---- Smooth (anti-aliased) fonts -------------------------------------------
-// Required by tft.loadFont(IBMPlexMono16) and by simple-tui's TftDisplay.
+// Required by tft.loadFont(IBMPlexMono16) and by SimpleTui's TftDisplay.
 #define SMOOTH_FONT
 
 // ---- SPI clock -------------------------------------------------------------
